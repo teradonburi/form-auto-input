@@ -11,7 +11,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["*"],
+      "matches": ["<all_urls>"],
       "js": ["src/content.ts"],
       "run_at": "document_idle"
     }
