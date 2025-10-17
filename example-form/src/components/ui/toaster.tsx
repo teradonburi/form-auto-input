@@ -16,15 +16,6 @@ export function Toaster() {
   return (
     <ToastProvider>
       {toasts.map(function ({ id, title, description, action, ...props }) {
-<<<<<<< Updated upstream
-        return (
-          <Toast key={id} {...props}>
-            <div className="grid gap-1">
-              {title && <ToastTitle>{title}</ToastTitle>}
-              {description && (
-                <ToastDescription>{description}</ToastDescription>
-              )}
-=======
         // ランダムに画像を選択
         const randomImage = Math.random() < 0.5 ? "/images/boy.png" : "/images/girl.png"
 
@@ -42,7 +33,6 @@ export function Toaster() {
                   <ToastDescription className="text-lg">{description}</ToastDescription>
                 )}
               </div>
->>>>>>> Stashed changes
             </div>
             {action}
             <ToastClose />
