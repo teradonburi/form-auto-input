@@ -1,0 +1,48 @@
+# === Node.js ===
+node_modules/
+.pnpm-store/
+
+# === Build outputs ===
+dist/
+build/
+coverage/
+
+# === Vite caches ===
+.vite/
+node_modules/.vite/
+.cache/
+
+# === Logs ===
+logs/
+*.log
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# === Editor/IDE ===
+.vscode/
+.idea/
+*.swp
+
+# === OS files ===
+.DS_Store
+Thumbs.db
+
+# === Env files (keep example) ===
+.env
+.env.*
+!.env.example
+
+# === TypeScript ===
+*.tsbuildinfo
+
+# === Test/Vitest ===
+.vitest/
+coverage/
+
+# === Browser extension bundles ===
+*.crx
+*.zip
