@@ -40,6 +40,8 @@ export const Panel: FC<PanelProps> = ({ stats }) => {
 
   const [calcOpen, setCalcOpen] = useState(false);
 
+  console.log("stats", stats);
+
   return (
     <Card
       sx={{
@@ -52,6 +54,7 @@ export const Panel: FC<PanelProps> = ({ stats }) => {
         backgroundColor: "rgba(255,255,255,0.85)",
       }}
     >
+      <div>ああああああ</div>
       <CardContent
         sx={{
           pt: 1,
