@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Building2,
   Briefcase,
@@ -9,8 +9,16 @@ import {
   Shield,
   Wrench,
 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Toaster } from "@/components/ui/toaster"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import RentalFormPage from './forms/rental/page'
 import GymFormPage from './forms/gym/page'
 import SeminarFormPage from './forms/seminar/page'
@@ -91,6 +99,14 @@ type FormId = "rental" | "gym" | "insurance" | "seminar" | "cleaning" | "school"
 
 function App() {
   const [currentForm, setCurrentForm] = useState<FormId>(null)
+  const [showVideoDialog, setShowVideoDialog] = useState(false)
+
+  useEffect(() => {
+    // フォームが選択されたときに動画ダイアログを表示
+    if (currentForm) {
+      setShowVideoDialog(true)
+    }
+  }, [currentForm])
 
   const handleBack = () => setCurrentForm(null)
 
@@ -159,6 +175,32 @@ function App() {
 
   return (
     <>
+      <Dialog open={showVideoDialog} onOpenChange={setShowVideoDialog}>
+        <DialogContent className="max-w-[80vw] max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="text-3xl">フォームの使い方</DialogTitle>
+            <DialogDescription className="text-lg">
+              こちらの動画でフォームの入力方法をご説明いたします
+            </DialogDescription>
+          </DialogHeader>
+          <div className="w-full" style={{ aspectRatio: '16/9' }}>
+            <video
+              className="w-full h-full rounded-lg"
+              controls
+              autoPlay
+              src="/video/girl.mp4"
+            >
+              お使いのブラウザは動画タグをサポートしていません。
+            </video>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={() => setShowVideoDialog(false)} className="text-lg px-6 py-3">
+              閉じる
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {renderForm()}
       <Toaster />
     </>
