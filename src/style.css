@@ -1,8 +1,0 @@
-:root {
-    --ftbv-primary-color: #1976d2;
-}
-
-/* Panel shadow */
-#ftbv-root-react .MuiCard-root {
-    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16);
-}
