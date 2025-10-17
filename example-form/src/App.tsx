@@ -92,24 +92,26 @@ type FormId = "rental" | "gym" | "insurance" | "seminar" | "cleaning" | "school"
 function App() {
   const [currentForm, setCurrentForm] = useState<FormId>(null)
 
+  const handleBack = () => setCurrentForm(null)
+
   const renderForm = () => {
     switch (currentForm) {
       case 'rental':
-        return <RentalFormPage />
+        return <RentalFormPage onBack={handleBack} />
       case 'gym':
-        return <GymFormPage />
+        return <GymFormPage onBack={handleBack} />
       case 'insurance':
-        return <InsuranceFormPage />
+        return <InsuranceFormPage onBack={handleBack} />
       case 'seminar':
-        return <SeminarFormPage />
+        return <SeminarFormPage onBack={handleBack} />
       case 'cleaning':
-        return <CleaningFormPage />
+        return <CleaningFormPage onBack={handleBack} />
       case 'school':
-        return <SchoolFormPage />
+        return <SchoolFormPage onBack={handleBack} />
       case 'saas':
-        return <SaasFormPage />
+        return <SaasFormPage onBack={handleBack} />
       case 'repair':
-        return <RepairFormPage />
+        return <RepairFormPage onBack={handleBack} />
       default:
         return (
           <div className="min-h-screen bg-background">
@@ -155,12 +157,9 @@ function App() {
     }
   }
 
-  // Wrap form in a context that provides "back" functionality
   return (
     <>
-      <div onClick={() => currentForm && setCurrentForm(null)}>
-        {renderForm()}
-      </div>
+      {renderForm()}
       <Toaster />
     </>
   )

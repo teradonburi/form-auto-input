@@ -15,7 +15,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 
-export default function InsuranceFormPage() {
+interface InsuranceFormPageProps {
+  onBack: () => void
+}
+
+export default function InsuranceFormPage({ onBack }: InsuranceFormPageProps) {
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -31,20 +35,20 @@ export default function InsuranceFormPage() {
     })
 
     setIsSubmitting(false)
-    window.location.href = "/"
+    onBack()
   }
 
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4">
-          <a
-            href="/"
+                    <button
+            onClick={onBack}
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             フォーム一覧に戻る
-          </a>
+          </button>
         </div>
       </header>
 
