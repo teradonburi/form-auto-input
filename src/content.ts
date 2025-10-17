@@ -111,15 +111,79 @@ const resolveElement = (fieldId: string): (HTMLInputElement | HTMLTextAreaElemen
   return null;
 };
 
+const isVisuallyHidden = (el: Element): boolean => {
+  const s = getComputedStyle(el as HTMLElement);
+  if (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0') return true;
+  const rect = (el as HTMLElement).getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return true;
+  return false;
+};
+
+const findSiblingRoleCheckbox = (anchor: Element): HTMLButtonElement | null => {
+  const parent = anchor.closest('.flex, .space-y-3, .space-y-4, div');
+  if (!parent) return null;
+  const btn = parent.querySelector('button[role="checkbox"][data-slot="checkbox"], button[role="checkbox"]');
+  return (btn instanceof HTMLButtonElement ? btn : null);
+};
+
+const clickToSetRoleCheckbox = (btn: HTMLButtonElement, checked: boolean) => {
+  const current = btn.getAttribute('aria-checked');
+  const currBool = current === 'true';
+  if (currBool !== checked) {
+    btn.click();
+    const after = btn.getAttribute('aria-checked');
+    log.debug('role=checkbox toggled', { before: current, after, id: btn.id });
+  }
+};
+
+const findSiblingComboboxButton = (anchor: Element): HTMLButtonElement | null => {
+  const parent = anchor.closest('.space-y-2, .flex, div');
+  if (!parent) return null;
+  const btn = parent.querySelector('button[role="combobox"][data-slot="select-trigger"], button[role="combobox"]');
+  return (btn instanceof HTMLButtonElement ? btn : null);
+};
+
+const firstNonEmptyOptionValue = (sel: HTMLSelectElement): string | null => {
+  for (const o of Array.from(sel.options)) {
+    if (!o.disabled && o.value !== '') return o.value;
+  }
+  return null;
+};
+
+const updateComboboxVisual = (btn: HTMLButtonElement, sel: HTMLSelectElement) => {
+  const selected = sel.options[sel.selectedIndex];
+  if (!selected) return;
+  const labelSpan = btn.querySelector('[data-slot="select-value"]');
+  if (labelSpan) {
+    (labelSpan as HTMLElement).textContent = selected.textContent ?? selected.value;
+  }
+};
+
 const applyFill = (plan: FillPlan) => {
   plan.items.forEach((it) => {
     const el = resolveElement(it.fieldId);
-    if (!el) return;
+    if (!el) {
+      const roleBtn = tryQuery(`#${CSS.escape(it.fieldId)}`);
+      if (roleBtn instanceof HTMLButtonElement && roleBtn.getAttribute('role') === 'checkbox' && typeof it.value === 'boolean') {
+        clickToSetRoleCheckbox(roleBtn, it.value);
+        return;
+      }
+      return;
+    }
     if (it.sensitive || it.requiresConfirmation) return;
 
     if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
       if (el.type === 'checkbox') {
-        if (typeof it.value === 'boolean') el.checked = it.value;
+        if (typeof it.value === 'boolean') {
+          if (isVisuallyHidden(el)) {
+            const btn = findSiblingRoleCheckbox(el);
+            if (btn) {
+              clickToSetRoleCheckbox(btn, it.value);
+              return;
+            }
+          }
+          el.checked = it.value;
+        }
       } else if (el.type === 'radio') {
         const radios = document.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name)}"]`);
         let applied = false;
@@ -147,10 +211,13 @@ const applyFill = (plan: FillPlan) => {
       }
     } else if (el instanceof HTMLSelectElement) {
       if (typeof it.value === 'string') {
-        // If value is empty string or not found, choose the first enabled option
-        const has = Array.from(el.options).some((o) => o.value === it.value);
-        el.value = has && it.value !== '' ? it.value : (Array.from(el.options).find((o) => !o.disabled)?.value ?? '');
+        const has = Array.from(el.options).some((o) => o.value === it.value && o.value !== '');
+        const chosen = has ? it.value : (firstNonEmptyOptionValue(el) ?? '');
+        el.value = chosen;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
+        const comboBtn = findSiblingComboboxButton(el);
+        if (comboBtn) updateComboboxVisual(comboBtn, el);
       }
     }
   });
