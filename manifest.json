@@ -9,6 +9,12 @@
     "48": "images/icon48.jpeg",
     "128": "images/icon128.jpeg"
   },
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["https://*/*", "http://*/*"],
+  "background": {
+    "service_worker": "src/background.ts",
+    "type": "module"
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
@@ -17,6 +23,8 @@
     }
   ],
   "action": {
-    "default_title": "form auto input"
-  }
+    "default_title": "form auto input",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html"
 }
