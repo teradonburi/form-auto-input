@@ -21,6 +21,8 @@
 * 実行ログの閲覧（最後のN回）。
 * 一時無効化、サイト単位のホワイト/ブラックリスト。
 * i18n（最低限、英日）。
+* 右側固定のサイドパネル（ページ内オーバーレイ）。
+* OpenAI API通信のON/OFFトグル（右側UI）。OFF時はAIを呼ばず、各フィールドにデモ用のプレースホルダ（例："DEMO"、"サンプル太郎"、"example@example.com" 等）を充填。
 
 ## 1.3 非機能要件
 
@@ -43,6 +45,11 @@
 
   * DOM解析（フォーム構造→中間スキーマ化）、ハイライト、入力適用。
   * ユーザー操作（右上ポップアップ経由のコマンド）受信。
+* **Side Panel（Content Overlay）**
+
+  * ページ右側に固定表示されるオーバーレイUI。
+  * OpenAI通信ON/OFFトグル、実行/やり直し、結果プレビュー、簡易ログを提供。
+  * OFF時はローカルのデモ用プレースホルダで即時入力（ネットワーク通信なし）。
 * **Popup（React + MUI）**
 
   * そのページ限定の実行UI、直近結果の確認・やり直し、除外切替。
@@ -57,8 +64,9 @@
 
 1. Content ScriptがフォームDOMを**抽出→正規化スキーマ**（`FormSchema`）生成。
 2. 既存の**DomainMapping**と**UserProfile**を付与し**Backgroundへ送信**。
-3. Backgroundが**プロンプト/JSONスキーマ**を構築し**OpenAI API**をコール。
-4. **構造化応答**（`FillPlan`）をContent Scriptへ返却。
+3. OpenAIトグルがONの場合、Backgroundが**プロンプト/JSONスキーマ**を構築し**OpenAI API**をコール。
+4. ON時は**構造化応答**（`FillPlan`）をContent Scriptへ返却し適用。
+3'. トグルがOFFの場合、Background呼び出しをスキップし、Content Scriptが**デモ用プレースホルダ**で`FillPlan`を生成して適用。
 5. Content Scriptが安全性チェックを行い、**自動 or 手動確認**で入力適用。
 6. ユーザーが修正した場合、差分を**学習データ**としてBackgroundへ送信→**DomainMapping更新**。
 
@@ -397,6 +405,12 @@ export const SwitchRow = (props: SwitchRowProps) => {
 * 現在タブのフォームを**解析→プラン取得→実行**のワンショットUI。
 * 自動/半自動切替、今回のみ除外、ログリンク。
 
+### 8.3 Side Panel（ページ右側固定UI）
+
+* 常時右側に表示（折りたたみ可）。
+* OpenAI通信トグル（ON/OFF）。ON: Background経由で推論／OFF: プレースホルダで充填（ネットワーク通信なし）。
+* 実行/やり直し/除外、直近結果、簡易ログの表示。
+
 ---
 
 # 9. 権限/Manifest/ビルド
@@ -437,6 +451,7 @@ export const SwitchRow = (props: SwitchRowProps) => {
 
 * **デフォルト設定**：機密（`password`, `card_*`）は**送信禁止＆自動入力しない**。
 * 送信時は**明示のトグル＋その場の確認**（ワンタイム許可）。
+* OpenAIトグルOFF時はネットワーク通信を行わない（ゼロ送信）。
 * 送信前に**プロファイルからの抽出フィールドを限定**（不要データは送らない）。
 * ログは**マスク**（例：メールは`a***@d***.com`、電話は末尾4桁のみ）。
 * API Keyは`chrome.storage.local`に暗号化保存（拡張内暗号鍵でも、漏えい対策に**最小権限**＆**バックアップOFF**推奨）。
@@ -451,14 +466,6 @@ export const SwitchRow = (props: SwitchRowProps) => {
 
 ---
 
-# 12. テスト計画
-
-* **ユニット**：DOM抽出器（ラベル特定/セレクタ生成）、JSONスキーマバリデーション、セーフティ判定。
-* **結合**：Content↔Backgroundメッセージ、バックオフ、フォールバック。
-* **E2E**：主要サイトのフォーム（問い合わせ/会員登録/EC配送先/決済画面の一歩手前）でシナリオ確認。
-* **回帰**：DomainMapping学習後の再入力が安定するか。
-
----
 
 # 13. 参考プロンプト（雛形）
 
