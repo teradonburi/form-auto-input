@@ -1,5 +1,6 @@
 import { DomainMapping, FillPlan, FormSchema, UserProfile } from '../types/index';
 import { safeExtractFillPlan } from './safeExtract';
+import { log } from '../utils/logger';
 
 export type CallOpenAIArgs = {
   schema: FormSchema;
@@ -82,9 +83,11 @@ export const callOpenAI = async (args: CallOpenAIArgs): Promise<FillPlan> => {
   });
 
   if (!res.ok) {
+    log.warn('OpenAI non-OK status', res.status, await res.text().catch(() => ''));
     throw new Error(`OpenAI API error: ${res.status}`);
   }
   const data: unknown = await res.json();
+  log.debug('OpenAI raw response received');
   return safeExtractFillPlan(data);
 };
 
@@ -97,12 +100,15 @@ export const callOpenAIWithRetry = async (
   // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
-      return await callOpenAI(args);
+      log.debug('OpenAI attempt', attempt + 1);
+      const plan = await callOpenAI(args);
+      return plan;
     } catch (e: unknown) {
       attempt += 1;
       if (attempt > opts.retries) throw e as Error;
       await delay(delayMs);
       delayMs = Math.min(delayMs * 2, opts.maxDelayMs);
+      log.warn('OpenAI retrying', attempt, 'nextDelayMs', delayMs, e);
     }
   }
 };

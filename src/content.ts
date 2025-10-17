@@ -3,6 +3,7 @@ import { FormSchema, FieldDescriptor, CsToBgMessage, BgToCsMessage, FillPlan } f
 import { DomainMapping } from './types/index';
 import { ensureSidePanel } from './dom/sidePanel';
 import { loadSettings } from './utils/settings';
+import { log } from './utils/logger';
 
 const qsa = (root: Document | Element, sel: string): Element[] => Array.from(root.querySelectorAll(sel));
 
@@ -65,6 +66,7 @@ const extractField = (el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectEle
 
 const extractFormSchema = (): FormSchema[] => {
   const forms: FormSchema[] = [];
+  log.debug('Extracting forms');
   qsa(document, 'form').forEach((fEl) => {
     const inputs = qsa(fEl, 'input, textarea, select') as (HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement)[];
     const fields = inputs.map(extractField);
@@ -76,6 +78,7 @@ const extractFormSchema = (): FormSchema[] => {
     });
   });
   if (forms.length === 0) {
+    log.debug('No form tags, trying virtual container');
     const inputs = qsa(document, 'input, textarea, select') as (HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement)[];
     if (inputs.length > 0) {
       forms.push({
@@ -122,6 +125,7 @@ const applyFill = (plan: FillPlan) => {
       }
     }
   });
+  log.info('Applied plan', plan.formId, plan.items.length);
 };
 
 const requestAI = (schema: FormSchema) => {
@@ -129,23 +133,37 @@ const requestAI = (schema: FormSchema) => {
     kind: 'request_fill',
     payload: { schema, domainMapping: undefined, profile: undefined, locale: navigator.language || 'ja-JP' }
   };
+  log.info('Requesting plan', schema.formId, schema.fields.length);
   chrome.runtime.sendMessage(msg as unknown, (resp: unknown) => {
     const r = resp as BgToCsMessage | undefined;
     if (!r || r.kind !== 'fill_result') return;
+    log.debug('Plan received');
     applyFill(r.payload.plan);
   });
 };
 
-const init = () => {
+const init = async () => {
+  const s = await loadSettings();
+  log.debug('Loaded settings', s.openai.enabled);
   ensureSidePanel({
+    settings: s,
     onRun: () => {
       const schemas = extractFormSchema();
       schemas.forEach(requestAI);
     },
-    onToggleAI: async (enabled) => {
-      const current = await chrome.storage.local.get(['settings']);
-      const s = (current.settings ?? { locale: navigator.language || 'ja-JP', openai: { enabled: false }, privacy: {} }) as Awaited<ReturnType<typeof loadSettings>>;
-      await chrome.storage.local.set({ settings: { ...s, openai: { ...s.openai, enabled } } });
+    onSave: async (next) => {
+      await chrome.storage.local.set({ settings: next });
+      // re-render panel with latest
+      ensureSidePanel({ settings: next, onRun: () => {
+        const schemas = extractFormSchema();
+        schemas.forEach(requestAI);
+      }, onSave: async (n) => {
+        await chrome.storage.local.set({ settings: n });
+        ensureSidePanel({ settings: n, onRun: () => {
+          const schemas2 = extractFormSchema();
+          schemas2.forEach(requestAI);
+        }, onSave: () => {} });
+      } });
     },
   });
   const schemas = extractFormSchema();
@@ -153,6 +171,6 @@ const init = () => {
 };
 
 // support re-run from popup
-document.addEventListener('form-auto-input:run', () => init(), { once: false });
+document.addEventListener('form-auto-input:run', () => { void init(); }, { once: false });
 
-init();
+void init();

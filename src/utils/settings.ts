@@ -18,7 +18,7 @@ export type AppSettings = {
 
 const DEFAULT_SETTINGS: AppSettings = {
   locale: 'ja-JP',
-  openai: { enabled: false },
+  openai: { enabled: false, model: 'gpt-5' },
   privacy: {},
 };
 
@@ -26,6 +26,7 @@ export const loadSettings = async (): Promise<AppSettings> => {
   const keys = ['settings'];
   const raw = await chrome.storage.local.get(keys);
   const s = raw.settings as unknown;
+  // console-level logging is handled by callers
   if (!s || typeof s !== 'object') return DEFAULT_SETTINGS;
   const obj = s as Partial<AppSettings>;
   return {
