@@ -45,14 +45,16 @@ const makePlan = async (schema: FormSchema): Promise<FillPlan> => {
   log.debug('makePlan settings', settings.openai.enabled, settings.locale);
   if (!settings.openai.enabled) {
     log.info('OpenAI disabled, using placeholder');
-    return buildPlaceholderPlan(schema);
+    const pl = buildPlaceholderPlan(schema);
+    return { ...pl, notes: [...(pl.notes ?? []), 'source=placeholder', 'reason=openaiDisabled'] };
   }
 
   const apiKey = settings.openai.apiKey;
   const model = settings.openai.model;
   if (!apiKey || !model) {
     log.warn('OpenAI missing apiKey or model, using placeholder');
-    return buildPlaceholderPlan(schema);
+    const pl = buildPlaceholderPlan(schema);
+    return { ...pl, notes: [...(pl.notes ?? []), 'source=placeholder', 'reason=missingCredentials'] };
   }
 
   try {
@@ -67,11 +69,12 @@ const makePlan = async (schema: FormSchema): Promise<FillPlan> => {
       { retries: 4, initialDelayMs: 500, maxDelayMs: 16000 }
     );
     log.info('OpenAI plan received', plan.items.length);
-    return plan;
+    return { ...plan, notes: [...(plan.notes ?? []), `source=openai`, `model=${model}`] };
   } catch (e) {
     log.error('OpenAI failed, fallback to placeholder', e);
     // Fallback to placeholder plan on failure
-    return buildPlaceholderPlan(schema);
+    const pl = buildPlaceholderPlan(schema);
+    return { ...pl, notes: [...(pl.notes ?? []), 'source=placeholder', 'reason=openaiError'] };
   }
 };
 

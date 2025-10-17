@@ -73,6 +73,8 @@ export const callOpenAI = async (args: CallOpenAIArgs): Promise<FillPlan> => {
     temperature: args.temperature ?? 0,
   } as const;
 
+  const startedAt = Date.now();
+  log.info('OpenAI request start', args.model);
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -81,7 +83,8 @@ export const callOpenAI = async (args: CallOpenAIArgs): Promise<FillPlan> => {
     },
     body: JSON.stringify(body),
   });
-
+  const elapsedMs = Date.now() - startedAt;
+  log.info('OpenAI response', res.status, `${elapsedMs}ms`);
   if (!res.ok) {
     log.warn('OpenAI non-OK status', res.status, await res.text().catch(() => ''));
     throw new Error(`OpenAI API error: ${res.status}`);

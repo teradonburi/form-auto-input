@@ -90,9 +90,30 @@ const extractFormSchema = (): FormSchema[] => {
   return forms;
 };
 
+const tryQuery = (sel: string): Element | null => {
+  try {
+    return document.querySelector(sel);
+  } catch {
+    return null;
+  }
+};
+
+const resolveElement = (fieldId: string): (HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) | null => {
+  // 1) try as CSS selector
+  const asCss = tryQuery(fieldId);
+  if (asCss && (asCss instanceof HTMLInputElement || asCss instanceof HTMLTextAreaElement || asCss instanceof HTMLSelectElement)) return asCss;
+  // 2) try [name="..."]
+  const byName = tryQuery(`[name="${CSS.escape(fieldId)}"]`);
+  if (byName && (byName instanceof HTMLInputElement || byName instanceof HTMLTextAreaElement || byName instanceof HTMLSelectElement)) return byName as any;
+  // 3) try #id
+  const byId = tryQuery(`#${CSS.escape(fieldId)}`);
+  if (byId && (byId instanceof HTMLInputElement || byId instanceof HTMLTextAreaElement || byId instanceof HTMLSelectElement)) return byId as any;
+  return null;
+};
+
 const applyFill = (plan: FillPlan) => {
   plan.items.forEach((it) => {
-    const el = document.querySelector(it.fieldId.startsWith('#') || it.fieldId.startsWith('.') ? it.fieldId : `[name="${CSS.escape(it.fieldId)}"]`) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
+    const el = resolveElement(it.fieldId);
     if (!el) return;
     if (it.sensitive || it.requiresConfirmation) return;
 
@@ -111,6 +132,12 @@ const applyFill = (plan: FillPlan) => {
           }
         });
         if (!applied) { /* no-op */ }
+      } else if (el.type === 'date' || el.type === 'datetime-local') {
+        if (typeof it.value === 'string') {
+          el.value = it.value;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
       } else {
         if (typeof it.value === 'string') {
           el.value = it.value;
@@ -120,7 +147,9 @@ const applyFill = (plan: FillPlan) => {
       }
     } else if (el instanceof HTMLSelectElement) {
       if (typeof it.value === 'string') {
-        el.value = it.value;
+        // If value is empty string or not found, choose the first enabled option
+        const has = Array.from(el.options).some((o) => o.value === it.value);
+        el.value = has && it.value !== '' ? it.value : (Array.from(el.options).find((o) => !o.disabled)?.value ?? '');
         el.dispatchEvent(new Event('change', { bubbles: true }));
       }
     }
@@ -134,11 +163,35 @@ const requestAI = (schema: FormSchema) => {
     payload: { schema, domainMapping: undefined, profile: undefined, locale: navigator.language || 'ja-JP' }
   };
   log.info('Requesting plan', schema.formId, schema.fields.length);
+  let timeoutHit = false;
+  const timer = setTimeout(() => {
+    timeoutHit = true;
+    log.warn('Background timeout (no response within 5s)', schema.formId);
+  }, 5000);
   chrome.runtime.sendMessage(msg as unknown, (resp: unknown) => {
+    clearTimeout(timer);
+    const lastErr = chrome.runtime.lastError;
+    if (lastErr) {
+      log.error('chrome.runtime.lastError', lastErr.message);
+    }
     const r = resp as BgToCsMessage | undefined;
-    if (!r || r.kind !== 'fill_result') return;
-    log.debug('Plan received');
-    applyFill(r.payload.plan);
+    if (!r) {
+      log.error('No response from background', timeoutHit ? 'timeout=true' : 'timeout=false');
+      return;
+    }
+    if (r.kind === 'error') {
+      log.error('Background error', r.payload.message);
+      return;
+    }
+    if (r.kind !== 'fill_result') return;
+    const plan = r.payload.plan;
+    log.debug('Plan received', plan.notes ?? []);
+    if (Array.isArray(plan.notes)) {
+      const src = plan.notes.find((n) => n.startsWith('source='));
+      const model = plan.notes.find((n) => n.startsWith('model='));
+      log.info('Plan meta', src ?? 'source=?', model ?? 'model=?');
+    }
+    applyFill(plan);
   });
 };
 
