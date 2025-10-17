@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "freee 勤怠管理 Plus Plus",
-  "description": "freee勤怠の実働情報から詳細情報を計算します。",
+  "name": "form auto input",
+  "description": "form auto input",
   "version": "0.1.0",
   "icons": {
     "16": "images/icon16.jpeg",
@@ -11,12 +11,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://kintaiplus.freee.co.jp/*"],
+      "matches": ["*"],
       "js": ["src/content.ts"],
       "run_at": "document_idle"
     }
   ],
   "action": {
-    "default_title": "freee 勤怠管理 Plus Plus"
+    "default_title": "form auto input"
   }
 }
