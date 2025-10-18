@@ -48,7 +48,7 @@ const extractField = (el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectEle
     if (trimmed) contextTexts.push(trimmed.slice(0, 300));
   }
 
-  return {
+  const base: FieldDescriptor = {
     id: el.id || el.name || buildCssPath(el),
     name: el.getAttribute('name') ?? undefined,
     labelText,
@@ -62,6 +62,26 @@ const extractField = (el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectEle
     selector: buildCssPath(el),
     contextTexts
   };
+
+  // Heuristic: if checkbox/select is rendered as hidden native control with a sibling role button, prefer the visible button's id
+  const container = el.closest('.space-y-2, .space-y-3, .space-y-4, .flex, div') ?? el.parentElement;
+  if (container) {
+    if (type === 'checkbox') {
+      const roleBtn = container.querySelector('button[role="checkbox"]') as HTMLButtonElement | null;
+      if (roleBtn && roleBtn.id) {
+        base.id = roleBtn.id;
+        base.selector = `#${CSS.escape(roleBtn.id)}`;
+      }
+    } else if (type === 'select') {
+      const comboBtn = container.querySelector('button[role="combobox"]') as HTMLButtonElement | null;
+      if (comboBtn && comboBtn.id) {
+        base.id = comboBtn.id;
+        base.selector = `#${CSS.escape(comboBtn.id)}`;
+      }
+    }
+  }
+
+  return base;
 };
 
 const extractFormSchema = (): FormSchema[] => {
@@ -70,6 +90,7 @@ const extractFormSchema = (): FormSchema[] => {
   qsa(document, 'form').forEach((fEl) => {
     const inputs = qsa(fEl, 'input, textarea, select') as (HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement)[];
     const fields = inputs.map(extractField);
+    log.debug('Form extracted', { id: fEl.id, count: fields.length });
     forms.push({
       formId: (fEl.getAttribute('id') ?? '') || `form-${forms.length + 1}`,
       action: fEl.getAttribute('action') ?? undefined,
@@ -80,10 +101,13 @@ const extractFormSchema = (): FormSchema[] => {
   if (forms.length === 0) {
     log.debug('No form tags, trying virtual container');
     const inputs = qsa(document, 'input, textarea, select') as (HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement)[];
+    log.debug('Virtual inputs count', inputs.length);
     if (inputs.length > 0) {
+      const fields = inputs.map(extractField);
+      log.debug('Virtual form fields', fields.length);
       forms.push({
         formId: 'virtual-form-1',
-        fields: inputs.map(extractField)
+        fields
       });
     }
   }
@@ -98,16 +122,16 @@ const tryQuery = (sel: string): Element | null => {
   }
 };
 
-const resolveElement = (fieldId: string): (HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) | null => {
+const resolveElement = (fieldId: string): Element | null => {
   // 1) try as CSS selector
   const asCss = tryQuery(fieldId);
-  if (asCss && (asCss instanceof HTMLInputElement || asCss instanceof HTMLTextAreaElement || asCss instanceof HTMLSelectElement)) return asCss;
+  if (asCss) return asCss;
   // 2) try [name="..."]
   const byName = tryQuery(`[name="${CSS.escape(fieldId)}"]`);
-  if (byName && (byName instanceof HTMLInputElement || byName instanceof HTMLTextAreaElement || byName instanceof HTMLSelectElement)) return byName as any;
+  if (byName) return byName as any;
   // 3) try #id
   const byId = tryQuery(`#${CSS.escape(fieldId)}`);
-  if (byId && (byId instanceof HTMLInputElement || byId instanceof HTMLTextAreaElement || byId instanceof HTMLSelectElement)) return byId as any;
+  if (byId) return byId as any;
   return null;
 };
 
@@ -172,6 +196,27 @@ const applyFill = (plan: FillPlan) => {
     }
     if (it.sensitive || it.requiresConfirmation) return;
 
+    if (el instanceof HTMLButtonElement) {
+      const role = el.getAttribute('role');
+      if (role === 'checkbox' && typeof it.value === 'boolean') {
+        clickToSetRoleCheckbox(el, it.value);
+        return;
+      }
+      if (role === 'combobox' && typeof it.value === 'string') {
+        const parent = el.closest('.space-y-2, .flex, div');
+        const sel = parent ? parent.querySelector('select') : null;
+        if (sel instanceof HTMLSelectElement) {
+          const has = Array.from(sel.options).some((o) => o.value === it.value && o.value !== '');
+          const chosen = has ? it.value : (firstNonEmptyOptionValue(sel) ?? '');
+          sel.value = chosen;
+          sel.dispatchEvent(new Event('input', { bubbles: true }));
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+          updateComboboxVisual(el, sel);
+        }
+        return;
+      }
+    }
+
     if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
       if (el.type === 'checkbox') {
         if (typeof it.value === 'boolean') {
@@ -234,7 +279,7 @@ const requestAI = (schema: FormSchema) => {
   const timer = setTimeout(() => {
     timeoutHit = true;
     log.warn('Background timeout (no response within 5s)', schema.formId);
-  }, 5000);
+  }, 100000);
   chrome.runtime.sendMessage(msg as unknown, (resp: unknown) => {
     clearTimeout(timer);
     const lastErr = chrome.runtime.lastError;
@@ -248,6 +293,10 @@ const requestAI = (schema: FormSchema) => {
     }
     if (r.kind === 'error') {
       log.error('Background error', r.payload.message);
+      // common hints for HTTP 400
+      if (/400/.test(r.payload.message)) {
+        log.warn('Hint: Check API Key, model name, and response_format compatibility. Also ensure OpenAI通信が有効 and settings saved.');
+      }
       return;
     }
     if (r.kind !== 'fill_result') return;
@@ -269,6 +318,7 @@ const init = async () => {
     settings: s,
     onRun: () => {
       const schemas = extractFormSchema();
+      log.debug('Schemas', schemas.map((f) => ({ formId: f.formId, fields: f.fields.length })));
       schemas.forEach(requestAI);
     },
     onSave: async (next) => {
@@ -276,11 +326,13 @@ const init = async () => {
       // re-render panel with latest
       ensureSidePanel({ settings: next, onRun: () => {
         const schemas = extractFormSchema();
+        log.debug('Schemas', schemas.map((f) => ({ formId: f.formId, fields: f.fields.length })));
         schemas.forEach(requestAI);
       }, onSave: async (n) => {
         await chrome.storage.local.set({ settings: n });
         ensureSidePanel({ settings: n, onRun: () => {
           const schemas2 = extractFormSchema();
+          log.debug('Schemas', schemas2.map((f) => ({ formId: f.formId, fields: f.fields.length })));
           schemas2.forEach(requestAI);
         }, onSave: () => {} });
       } });

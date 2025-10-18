@@ -37,7 +37,7 @@ const buildPlaceholderValue = (type: string): string | boolean | undefined => {
 export const buildPlaceholderPlan = (schema: FormSchema): FillPlan => {
   const items: FillItem[] = [];
   for (const f of schema.fields) {
-    if (f.type === 'password' || f.type === 'hidden' || f.type === 'radio' || f.type === 'checkbox') {
+    if (f.type === 'password' || f.type === 'hidden' || f.type === 'radio') {
       continue; // skip sensitive/ambiguous by default
     }
     const value = buildPlaceholderValue(f.type);

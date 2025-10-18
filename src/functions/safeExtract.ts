@@ -24,48 +24,17 @@ const isFillPlan = (v: unknown): v is FillPlan => {
   return true;
 };
 
-type OpenAIChat = {
-  choices: Array<{
-    message?: { content?: string };
-  }>;
-};
-
-const isOpenAIChat = (v: unknown): v is OpenAIChat => {
-  if (!isObject(v)) return false;
-  const choices = (v as { choices?: unknown }).choices;
-  if (!Array.isArray(choices) || choices.length === 0) return false;
-  const first = choices[0] as unknown;
-  if (!isObject(first)) return false;
-  const msg = (first as { message?: unknown }).message;
-  if (!isObject(msg)) return false;
-  const content = (msg as { content?: unknown }).content;
-  return typeof content === 'string' && content.length > 0;
-};
-
-const tryParseJson = (raw: string): unknown => {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    const start = raw.indexOf('{');
-    const end = raw.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-      const slice = raw.slice(start, end + 1);
-      return JSON.parse(slice);
-    }
-    throw new Error('OpenAI content is not valid JSON');
-  }
-};
-
 export const safeExtractFillPlan = (data: unknown): FillPlan => {
-  if (!isOpenAIChat(data)) {
-    throw new Error('Unexpected OpenAI response shape');
-  }
-  const content = data.choices[0]?.message?.content ?? '';
-  const parsed = tryParseJson(content);
-  if (!isFillPlan(parsed)) {
-    throw new Error('Parsed JSON is not a valid FillPlan');
-  }
-  return parsed;
+  if (!isObject(data)) throw new Error('Unexpected OpenAI response');
+  const choices = (data as { choices?: unknown }).choices;
+  if (!Array.isArray(choices) || choices.length === 0) throw new Error('No choices');
+  const first = choices[0] as any;
+  const msg = first?.message;
+  const parsed = msg?.parsed ?? msg?.content;
+  if (!parsed) throw new Error('No parsed/content in message');
+  const obj = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+  if (!isFillPlan(obj)) throw new Error('Parsed object is not FillPlan');
+  return obj;
 };
 
 

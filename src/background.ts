@@ -58,6 +58,7 @@ const makePlan = async (schema: FormSchema): Promise<FillPlan> => {
   }
 
   try {
+    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const plan = await callOpenAIWithRetry(
       {
         schema,
@@ -65,13 +66,18 @@ const makePlan = async (schema: FormSchema): Promise<FillPlan> => {
         model,
         apiKey,
         temperature: settings.openai.temperature,
+        requestId,
       },
       { retries: 4, initialDelayMs: 500, maxDelayMs: 16000 }
     );
-    log.info('OpenAI plan received', plan.items.length);
+    log.info('OpenAI plan received', { requestId, items: plan.items.length });
     return { ...plan, notes: [...(plan.notes ?? []), `source=openai`, `model=${model}`] };
   } catch (e) {
-    log.error('OpenAI failed, fallback to placeholder', e);
+    // 400の詳細本文を収集
+    try {
+      const err = e as Error;
+      log.error('OpenAI failed, fallback to placeholder', err.message);
+    } catch {}
     // Fallback to placeholder plan on failure
     const pl = buildPlaceholderPlan(schema);
     return { ...pl, notes: [...(pl.notes ?? []), 'source=placeholder', 'reason=openaiError'] };
